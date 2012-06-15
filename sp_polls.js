@@ -102,11 +102,63 @@ function SP_Poll_Connection(poll_list, poll_data)
 				"</Value></Eq></Where></Query>",
             completefunc: function (xData, Status) {
                 $(xData.responseXML).SPFilterNode("z:row").each(function() {
-                questions.push( $(this).attr("ows_Title") );
+                    questions.push( $(this).attr("ows_Title") );
                 });
             }
         });
 	};
+    
+    this.create_tables = function(){
+        //create poll_lists table
+        $().SPServices({
+            operation: "AddList",
+            async: false,
+            listName: this.poll_list,
+            templateID: 100
+        });
+
+        //create poll_data table
+        $().SPServices({
+            operation: "AddList",
+            async: false,
+            listName: this.poll_data,
+            templateID: 100
+        });
+        
+        //poll_lists column setup: need <text> p_type <counter> question ID
+        var new_fields_pl = "<Fields><Method ID='1'><Field Type='Text' Name='p_type' DisplayName='p_type' MaxLength='255' /></Method>";
+        new_fields_pl += "<Method ID='2'><Field Type='Counter' Name='question_id' DisplayName='question_id' /></Method></Fields>";
+        
+        $().SPServices({
+            operation: "UpdateList",
+            async: false,
+            listName: this.Poll_list,
+            listProperties: "<List Hidden='TRUE' />",
+            newFields: new_fields_pl
+        });
+        
+        var new_fields_pd = "<Fields><Method ID='1'><Field Type='Counter' Name='question_id' DisplayName='question_id' /></Method></Fields>";
+        
+        $().SPServicces({
+            operation: "UpdateList",
+            async: false,
+            listName: this.poll_data,
+            listProperties: "<List Hidden='TRUE' />",
+            newFields: new_fields_pd
+        });
+        
+    };
+    
+    this.set_question = function(question_id){
+        var my_URL = window.location.pathname;
+        $().SPServices({
+                operation: "UpdateListItems",
+                async: false,
+                batchCmd: "New",
+                listName: this.poll_list,
+                valuepairs: [["Title", my_URL], ["p_type", "Config"], ["question_id", question_id]]
+        });
+    };
 	
 	this.get_questions();
 }
