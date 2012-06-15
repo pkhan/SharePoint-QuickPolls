@@ -13,9 +13,14 @@ $(document).ready(function(){
     var conn;
     var poll;
     var display;
-	if(poll_elem.length > 0)
+    
+    //if the page is in edit mode, we don't want to display our poll, that can confuse the HTML editor
+    if(poll_elem.length > 0 && $(".ms-WPAddButton").length == 0)
 	{
 		//There is a poll receiving element, let's fill it up
+        
+        conn = new SP_Poll_Connection("poll_list","poll_data");
+        
 		if( poll_elem.attr("title") == "autoconfig" )
 		{
 			//write the autostart capability
@@ -24,26 +29,25 @@ $(document).ready(function(){
 		{
 			//the title attribute of the div contains the question to be polled
 			question_id = poll_elem.attr("title");
+            poll = conn.open_poll(question_id);
 		}
-		conn = new SP_Poll_Connection("poll_list","poll_data");
-		poll = conn.open_poll(question_id);
-		display = new Poll_Display(poll_elem,poll);
-
-	}
+        display = new Poll_Display(poll_elem,poll);
 	
-	if(!poll.already_voted())
-	{
-		//if they haven't voted yet, show them the vote panel
-		display.load_vote();
-		display.show_vote();
-	}
-	else
-	{
-		//if they already voted, show them the results
-		display.load_results();
-		display.show_results();
+		if(!poll.already_voted())
+		{
+			//if they haven't voted yet, show them the vote panel
+			display.load_vote();
+			display.show_vote();
+		}
+		else
+		{
+			//if they already voted, show them the results
+			display.load_results();
+			display.show_results();
+		}
 	}
 });
+
 
 function SP_Poll_Connection(poll_list, poll_data)
 {
@@ -137,6 +141,7 @@ function SP_Poll_Connection(poll_list, poll_data)
             newFields: new_fields_pl
         });
         
+        //poll_data column setup: needs <Counter> question_id
         var new_fields_pd = "<Fields><Method ID='1'><Field Type='Counter' Name='question_id' DisplayName='question_id' /></Method></Fields>";
         
         $().SPServicces({
@@ -149,7 +154,7 @@ function SP_Poll_Connection(poll_list, poll_data)
         
     };
     
-    this.set_question = function(question_id){
+    this.config_set_question = function(question_id){
         var my_URL = window.location.pathname;
         $().SPServices({
                 operation: "UpdateListItems",
@@ -158,6 +163,34 @@ function SP_Poll_Connection(poll_list, poll_data)
                 listName: this.poll_list,
                 valuepairs: [["Title", my_URL], ["p_type", "Config"], ["question_id", question_id]]
         });
+    };
+    
+    this.config_open_poll = function(){
+        var question_id = 0;
+        var my_URL = window.location.pathname;
+        
+        $().SPServices({
+            operation: "GetListItems",
+            async: false,
+            listName: this.poll_list,
+            CAMLViewFields: "<ViewFields><FieldRef Name='question_id' /></ViewFields>",
+            CAMLQuery: "<Query><Where><Eq><FieldRef Name='Title' /><Value Type='Text'>"+ my_URL +
+    			"</Value></Eq></Where></Query>",
+            completefunc: function (xData, Status) {
+                $(xData.responseXML).SPFilterNode("z:row").each(function() {
+                    question_id = $(this).attr("ows_question_id");
+                });
+            }
+        });
+        
+        if(question_id)
+        {
+            return this.open_poll(question_id);   
+        }
+        else
+        {
+            
+        }
     };
 	
 	this.get_questions();
@@ -278,11 +311,11 @@ function Poll_Display(poll_element, sp_poll)
 	this.sp_poll = sp_poll;
 	
 	//Time to build the divs
-	this.poll_vote = $('<div id="poll_vote"><div id="question_text" style="margin-bottom:20px"></div><form id="choices"></form><div style="text-align:right;margin-right:30px"><input type="button" id="vote" value="Vote" /></div></div>');
+	this.poll_vote = $('<div id="poll_vote"><div id="question_text" style="margin-bottom:20px"></div><div id="choices"></div><div style="text-align:right;margin-right:30px"><input type="button" id="vote" value="Vote" /></div></div>');
 	this.poll_results = $('<div id="poll_results"></div>');
 	this.poll_admin = $('<div id="poll_admin">Question:<select id="question_select"></select><a href="" id="add_question">+</a><div id="choice_inputs"></div></div>');
 	this.top = undefined;
-	this.poll_container.css({"overflow":"hidden","position":"absolute"});
+	this.poll_container.css({"overflow":"hidden","position":"relative"});
 	
 	this.hide_all = function(){
 		//var background_body = $("body").css("background-color");
@@ -337,7 +370,7 @@ function Poll_Display(poll_element, sp_poll)
 		var bar_height = 15;
 		var percent = 0;
 		var append_string = "";
-        var i
+        var i;
 		
 		for(i = 0; i < this.sp_poll.choices.length ; i++)
 		{
@@ -360,7 +393,7 @@ function Poll_Display(poll_element, sp_poll)
 				this.poll_results.append(append_string);
 			}
 		}
-		this.poll_results.append('<div style="text-align:right;margin-right:10px">Total Votes:' + total + '</div>');
+		this.poll_results.append('<div style="text-align:right;margin-right:10px">Total Votes: ' + total + '</div>');
 		
 	};
 	
@@ -391,6 +424,7 @@ function Poll_Display(poll_element, sp_poll)
 	};
 
 	this.hide_all();
+    this.poll_container.html("");
 	this.poll_container.append(this.poll_vote,this.poll_results,this.poll_admin);
 	var this_display = this;
 	
